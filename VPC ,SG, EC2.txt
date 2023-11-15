@@ -1,0 +1,216 @@
+
+
+resource "aws_vpc" "terraform_vpc" {
+  cidr_block       = "172.30.1.0/24"
+  instance_tenancy = "default"
+
+  tags = {
+    Name = "terraform_vpc"
+  }
+}
+
+resource "aws_subnet" "public_sub_terraform" {
+  vpc_id     = aws_vpc.terraform_vpc.id
+  cidr_block = "172.30.1.0/25"
+  availability_zone = "ap-south-1a"
+
+
+  tags = {
+    Name = "public_sub_terraform"
+  }
+}
+
+
+resource "aws_subnet" "private_sub_terraform" {
+  vpc_id     = aws_vpc.terraform_vpc.id
+  cidr_block = "172.30.1.128/25"
+
+  tags = {
+    Name = "private_sub_terraform"
+  }
+}
+
+
+resource "aws_internet_gateway" "terraform_IG" {
+  vpc_id = aws_vpc.terraform_vpc.id
+
+  tags = {
+    Name = "terraform_IG"
+  }
+}
+
+
+resource "aws_route_table" "terrform_public_RT" {
+  vpc_id = aws_vpc.terraform_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.terraform_IG.id
+  }
+
+
+  tags = {
+    Name = "terrform_public_RT"
+  }
+}
+
+resource "aws_route_table_association" "terraform_asso_RT_pub" {
+  subnet_id      = aws_subnet.public_sub_terraform.id
+  route_table_id = aws_route_table.terrform_public_RT.id
+}
+
+
+
+resource "aws_eip" "Elpterraform" {
+
+  vpc      = true
+}
+
+
+
+resource "aws_nat_gateway" "terraform_NAT" {
+   allocation_id = aws_eip.Elpterraform.id 
+  subnet_id     = aws_subnet.public_sub_terraform.id
+
+  tags = {
+    Name = "terraform NAT"
+  }
+
+}
+
+resource "aws_route_table" "terrform_private_RT" {
+  vpc_id = aws_vpc.terraform_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.terraform_NAT.id
+  }
+
+
+  tags = {
+    Name = "terrform_private_RT"
+  }
+}
+
+
+
+resource "aws_route_table_association" "terraform_asso_RT_private" {
+  subnet_id      = aws_subnet.private_sub_terraform.id
+  route_table_id = aws_route_table.terrform_private_RT.id
+}
+
+
+
+
+
+resource "aws_security_group" "Terraform_pub_SG" {
+  name        = "Terraform_pub_SG"
+  description = "Allow TLS inbound traffic"
+  vpc_id      = aws_vpc.terraform_vpc.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+  
+  }
+
+  tags = {
+    Name = "Terraform_pub_SG"
+  }
+}
+
+
+
+
+
+resource "aws_instance" "Public_terraform" {
+  ami           = "ami-0e742cca61fb65051"
+  instance_type = "t2.medium"
+  key_name      = "0602"
+
+
+subnet_id                   = aws_subnet.public_sub_terraform.id
+  vpc_security_group_ids      = [aws_security_group.Terraform_pub_SG.id]
+  associate_public_ip_address = true
+
+
+
+
+  tags = {
+    Name = "public_terraform_Ec2"
+  }
+}
+
+
+
+
+resource "aws_security_group" "Terraform_private_SG" {
+  name        = "Terraform_private_SG"
+  description = "Allow TLS inbound traffic"
+  vpc_id      = aws_vpc.terraform_vpc.id
+
+  ingress {
+    security_groups = [aws_security_group.Terraform_pub_SG.id]
+    from_port   = 0
+    to_port     = 0
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] 
+  }
+
+  /* ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }  */
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+  
+  }
+
+  tags = {
+    Name = "Terraform_private_SG"
+  }
+}
+
+
+
+
+resource "aws_instance" "Private_terraform" {
+  ami           = "ami-0e742cca61fb65051"
+  instance_type = "t2.medium"
+  key_name      = "0602"
+
+
+subnet_id                   = aws_subnet.private_sub_terraform.id
+  vpc_security_group_ids      = [aws_security_group.Terraform_private_SG.id]
+ # associate_public_ip_address = true
+
+
+
+
+  tags = {
+    Name = "private_terraform_Ec2"
+  }
+}
+
